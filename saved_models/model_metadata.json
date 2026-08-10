@@ -1,0 +1,169 @@
+{
+  "num_cols": [
+    "SGPA_Sem1",
+    "SGPA_Sem2",
+    "SGPA_Sem3",
+    "SGPA_Sem4",
+    "SGPA_Sem5",
+    "SGPA_Sem6",
+    "SGPA_Sem7",
+    "SGPA_Sem8",
+    "CGPA",
+    "AttendancePercent",
+    "Internships",
+    "Projects",
+    "Workshops",
+    "Certifications",
+    "Publications",
+    "AptitudeTestScore",
+    "SoftSkillsRating",
+    "CodingTestScore",
+    "MockInterviewScore",
+    "ExtraCurricular"
+  ],
+  "cat_cols": [
+    "Gender",
+    "City",
+    "CollegeTier",
+    "Stream",
+    "Specialisation",
+    "Hostel",
+    "HistoryOfBacklogs",
+    "CGPA_Tier"
+  ],
+  "clf_metrics": {
+    "accuracy": 0.9155,
+    "precision": 0.9194,
+    "recall": 0.9551,
+    "f1_score": 0.9369,
+    "roc_auc": 0.9774,
+    "confusion_matrix": [
+      [
+        2879,
+        550
+      ],
+      [
+        295,
+        6276
+      ]
+    ]
+  },
+  "reg_metrics": {
+    "r2_score": 0.9524,
+    "mae": 0.9915,
+    "mse": 3.6735,
+    "rmse": 1.9166
+  },
+  "feature_importances": [
+    {
+      "Feature": "SGPA_Sem8",
+      "Importance": 0.11509738082009434
+    },
+    {
+      "Feature": "SGPA_Sem7",
+      "Importance": 0.11408678963962318
+    },
+    {
+      "Feature": "SGPA_Sem5",
+      "Importance": 0.0865573323046082
+    },
+    {
+      "Feature": "MockInterviewScore",
+      "Importance": 0.07878833982349794
+    },
+    {
+      "Feature": "SGPA_Sem6",
+      "Importance": 0.07168817974852607
+    },
+    {
+      "Feature": "CGPA_Tier_Low",
+      "Importance": 0.050713922109534286
+    },
+    {
+      "Feature": "CodingTestScore",
+      "Importance": 0.04978906968961409
+    },
+    {
+      "Feature": "CGPA",
+      "Importance": 0.04541982770601262
+    },
+    {
+      "Feature": "SGPA_Sem2",
+      "Importance": 0.04368853694400669
+    },
+    {
+      "Feature": "Projects",
+      "Importance": 0.04342894937299704
+    },
+    {
+      "Feature": "SoftSkillsRating",
+      "Importance": 0.03962547537447701
+    },
+    {
+      "Feature": "SGPA_Sem4",
+      "Importance": 0.033562502049815965
+    },
+    {
+      "Feature": "SGPA_Sem1",
+      "Importance": 0.03173892824897772
+    },
+    {
+      "Feature": "Internships",
+      "Importance": 0.03165501648433742
+    },
+    {
+      "Feature": "SGPA_Sem3",
+      "Importance": 0.02872713453758898
+    }
+  ],
+  "cat_options": {
+    "Gender": [
+      "Female",
+      "Male"
+    ],
+    "City": [
+      "Ahmedabad",
+      "Bangalore",
+      "Chennai",
+      "Delhi",
+      "Hyderabad",
+      "Jaipur",
+      "Kochi",
+      "Kolkata",
+      "Mumbai",
+      "Pune"
+    ],
+    "CollegeTier": [
+      "Tier1",
+      "Tier2",
+      "Tier3"
+    ],
+    "Stream": [
+      "CS",
+      "Civil",
+      "ECE",
+      "EE",
+      "IT",
+      "Mechanical"
+    ],
+    "Specialisation": [
+      "AI",
+      "DataScience",
+      "Embedded",
+      "Networking"
+    ],
+    "Hostel": [
+      "No",
+      "Yes"
+    ],
+    "HistoryOfBacklogs": [
+      "No",
+      "Yes"
+    ],
+    "CGPA_Tier": [
+      "High",
+      "Low",
+      "Mid"
+    ]
+  }
+}
