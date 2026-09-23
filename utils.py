@@ -110,10 +110,23 @@ def get_missing_values_summary(df):
     
     return missing_df
 
-def apply_professional_layout(fig, title=None, height=450):
+def apply_professional_layout(fig, title=None, height=450, x_title=None, y_title=None):
     """
     Applies clean, high-contrast, professional light styling to any Plotly figure.
     """
+    xaxis_dict = dict(
+        gridcolor=GRID_COLOR,
+        linecolor="#cbd5e1",
+        tickfont=dict(color="#1e293b", size=11),
+        title=dict(text=x_title, font=dict(color="#0f172a", size=13)) if x_title else dict(font=dict(color="#0f172a", size=13))
+    )
+    yaxis_dict = dict(
+        gridcolor=GRID_COLOR,
+        linecolor="#cbd5e1",
+        tickfont=dict(color="#1e293b", size=11),
+        title=dict(text=y_title, font=dict(color="#0f172a", size=13)) if y_title else dict(font=dict(color="#0f172a", size=13))
+    )
+
     fig.update_layout(
         title=dict(text=title, font=dict(size=16, color="#0f172a", family="sans-serif")) if title else None,
         paper_bgcolor=PLOT_BG,
@@ -121,18 +134,8 @@ def apply_professional_layout(fig, title=None, height=450):
         font=dict(color="#0f172a", size=12),
         height=height,
         margin=dict(l=40, r=40, t=50, b=40),
-        xaxis=dict(
-            gridcolor=GRID_COLOR,
-            linecolor="#cbd5e1",
-            tickfont=dict(color="#1e293b", size=11),
-            title=dict(font=dict(color="#0f172a", size=13))
-        ),
-        yaxis=dict(
-            gridcolor=GRID_COLOR,
-            linecolor="#cbd5e1",
-            tickfont=dict(color="#1e293b", size=11),
-            title=dict(font=dict(color="#0f172a", size=13))
-        ),
+        xaxis=xaxis_dict,
+        yaxis=yaxis_dict,
         legend=dict(
             bgcolor="rgba(255,255,255,0.9)",
             bordercolor="#cbd5e1",

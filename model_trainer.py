@@ -16,6 +16,8 @@ from utils import load_data
 from logistic_regression import train_and_evaluate_logistic_regression
 from decision_tree import train_and_evaluate_decision_tree
 from ensemble_models import train_and_evaluate_ensemble_models
+from kmeans_clustering import train_and_evaluate_kmeans
+from pca_analysis import train_and_evaluate_pca
 
 MODEL_DIR = "saved_models"
 
@@ -136,6 +138,14 @@ def train_and_evaluate_models(custom_df=None):
     # 5 & 6. Ensemble Models (Bagging & Boosting)
     ensemble_pipes, ensemble_metrics = train_and_evaluate_ensemble_models(df)
     
+    # 7. Unsupervised Learning (KMeans Clustering & Silhouette Score Analysis)
+    print("Training KMeans Unsupervised Clustering & Silhouette Analysis...")
+    kmeans_pipeline, kmeans_metrics = train_and_evaluate_kmeans(df)
+    
+    # 8. Principal Component Analysis (PCA & Dimensionality Reduction Models)
+    print("Training PCA Dimensionality Reduction & PCA Downstream Models...")
+    pca_metrics, pca_pipelines, pca_df = train_and_evaluate_pca(df)
+    
     # Save Artifacts
     joblib.dump(lr_pipeline, os.path.join(MODEL_DIR, "salary_lr_pipeline.joblib"))
     joblib.dump(simple_lr, os.path.join(MODEL_DIR, "simple_cgpa_lr_model.joblib"))
@@ -167,6 +177,8 @@ def train_and_evaluate_models(custom_df=None):
         "xgb_regressor_metrics": ensemble_metrics.get("xgb_regressor_metrics", {}),
         "adaboost_classifier_metrics": ensemble_metrics.get("adaboost_classifier_metrics", {}),
         "adaboost_regressor_metrics": ensemble_metrics.get("adaboost_regressor_metrics", {}),
+        "kmeans_metrics": kmeans_metrics,
+        "pca_metrics": pca_metrics,
         "feature_coefficients": coef_records,
         "cat_options": {c: sorted([str(val) for val in df[c].dropna().unique().tolist()]) for c in cat_cols if c in df.columns}
     }
@@ -174,13 +186,13 @@ def train_and_evaluate_models(custom_df=None):
     with open(os.path.join(MODEL_DIR, "model_metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2)
         
-    print("All ML models (Base, ID3, C4.5, CART/Karth, GBM, LightGBM, XGBoost, AdaBoost, Random Forest, Bagging) trained and saved successfully!")
+    print("All ML models (Base, ID3, C4.5, CART/Karth, GBM, LightGBM, XGBoost, AdaBoost, Random Forest, Bagging, KMeans, PCA) trained and saved successfully!")
     return metadata
 
 def load_trained_pipelines():
     """
     Loads saved ML pipelines (Linear Regression, Logistic Regression, ID3, C4.5, CART/Karth,
-    Random Forest, Bagging, GBM, LightGBM, XGBoost, AdaBoost) along with metadata.
+    Random Forest, Bagging, GBM, LightGBM, XGBoost, AdaBoost, PCA) along with metadata.
     """
     lr_path = os.path.join(MODEL_DIR, "salary_lr_pipeline.joblib")
     simple_lr_path = os.path.join(MODEL_DIR, "simple_cgpa_lr_model.joblib")
@@ -208,6 +220,9 @@ def load_trained_pipelines():
     xgb_r_path = os.path.join(MODEL_DIR, "salary_xgb_pipeline.joblib")
     ada_c_path = os.path.join(MODEL_DIR, "placement_adaboost_pipeline.joblib")
     ada_r_path = os.path.join(MODEL_DIR, "salary_adaboost_pipeline.joblib")
+    kmeans_path = os.path.join(MODEL_DIR, "kmeans_pipeline.joblib")
+    pca_c_path = os.path.join(MODEL_DIR, "placement_pca_logistic_pipeline.joblib")
+    pca_r_path = os.path.join(MODEL_DIR, "salary_pca_lr_pipeline.joblib")
     
     meta_path = os.path.join(MODEL_DIR, "model_metadata.json")
     
@@ -216,7 +231,8 @@ def load_trained_pipelines():
         c45_c_path, c45_r_path, cart_c_path, cart_r_path,
         rf_c_path, rf_r_path, bag_c_path, bag_r_path,
         gbm_c_path, gbm_r_path, lgb_c_path, lgb_r_path,
-        xgb_c_path, xgb_r_path, ada_c_path, ada_r_path, meta_path
+        xgb_c_path, xgb_r_path, ada_c_path, ada_r_path, kmeans_path,
+        pca_c_path, pca_r_path, meta_path
     ]
     
     if not all(os.path.exists(p) for p in required_paths):
@@ -248,6 +264,9 @@ def load_trained_pipelines():
     xgb_r_pipeline = joblib.load(xgb_r_path)
     ada_c_pipeline = joblib.load(ada_c_path)
     ada_r_pipeline = joblib.load(ada_r_path)
+    kmeans_pipeline = joblib.load(kmeans_path) if os.path.exists(kmeans_path) else None
+    pca_c_pipeline = joblib.load(pca_c_path) if os.path.exists(pca_c_path) else None
+    pca_r_pipeline = joblib.load(pca_r_path) if os.path.exists(pca_r_path) else None
     
     with open(meta_path, "r") as f:
         metadata = json.load(f)
@@ -270,7 +289,10 @@ def load_trained_pipelines():
         "xgb_c": xgb_c_pipeline,
         "xgb_r": xgb_r_pipeline,
         "ada_c": ada_c_pipeline,
-        "ada_r": ada_r_pipeline
+        "ada_r": ada_r_pipeline,
+        "kmeans": kmeans_pipeline,
+        "pca_c": pca_c_pipeline,
+        "pca_r": pca_r_pipeline
     }
         
     return lr_pipeline, simple_lr, logistic_pipeline, dt_c_pipeline, dt_r_pipeline, ensemble_pipelines, metadata

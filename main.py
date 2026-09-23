@@ -8,6 +8,12 @@ import subprocess
 from model_trainer import train_and_evaluate_models
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     print("=" * 65)
     print("🎓 PLACEMENT ANALYTICS — LOGISTIC & LINEAR REGRESSION PLATFORM")
     print("=" * 65)
@@ -74,6 +80,26 @@ def main():
         print(f"\n--- [12] Simple Linear Regression (CGPA -> Salary Package) ---")
         print(f"  * Equation : Salary = {m['slope']:.2f} * CGPA + ({m['intercept']:.2f})")
         print(f"  * R2 Score : {m['r2_score']:.4f} (Correlation r = {m['correlation']:.4f})")
+
+    if 'kmeans_metrics' in metadata:
+        km_m = metadata['kmeans_metrics']
+        best_k = km_m.get('best_k', 3)
+        best_sil = km_m.get('best_silhouette', 0.0)
+        print(f"\n--- [13] KMeans Unsupervised Clustering & Silhouette Analysis ---")
+        print(f"  * Optimal k Clusters : {best_k}")
+        print(f"  * Peak Silhouette Score: {best_sil:.4f}")
+        print(f"  * 2D PCA Explained Var : {km_m.get('pca_variance_explained_2d', 0):.2f}%")
+
+    if 'pca_metrics' in metadata:
+        pca_m = metadata['pca_metrics']
+        pca_c_m = pca_m.get("pca_logistic_metrics", {})
+        pca_r_m = pca_m.get("pca_lr_metrics", {})
+        print(f"\n--- [14] Principal Component Analysis (PCA) & Dimensionality Reduction ---")
+        print(f"  * Total Original Features   : {pca_m.get('n_total_features', 0)}")
+        print(f"  * Components for 95% Var    : {pca_m.get('n_comp_95', 0)}")
+        print(f"  * PC1 & PC2 Variance        : {pca_m.get('pc1_var_pct', 0):.2f}% & {pca_m.get('pc2_var_pct', 0):.2f}%")
+        print(f"  * PCA + Logistic Classifier : Acc {pca_c_m.get('accuracy', 0)*100:.2f}% | F1 {pca_c_m.get('f1_score', 0):.4f} | ROC-AUC {pca_c_m.get('roc_auc', 0):.4f}")
+        print(f"  * PCA + Linear Regressor    : R2 {pca_r_m.get('r2_score', 0):.4f} | MAE Rs. {pca_r_m.get('mae', 0):.2f} LPA")
     
     print("\n" + "=" * 65)
     print("[2/2] Launching Streamlit Interactive Dashboard...")

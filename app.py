@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as px_go
+from sklearn.cluster import KMeans
 from utils import (
     load_data, get_dataset_metadata, get_missing_values_summary,
     plot_missing_values_chart, plot_univariate_distribution,
@@ -15,6 +16,22 @@ from utils import (
     apply_professional_layout, COLOR_PRIMARY, COLOR_PLACED, COLOR_NOT_PLACED
 )
 from model_trainer import load_trained_pipelines, train_and_evaluate_models
+from kmeans_clustering import (
+    plot_elbow_curve, plot_silhouette_curve, plot_silhouette_profile,
+    plot_cluster_pca_scatter, plot_cluster_distribution, plot_cluster_centroids_heatmap,
+    train_and_evaluate_kmeans, plot_silhouette_intervals_chart, plot_feature_confidence_intervals,
+    plot_overlapping_clusters_scatter, plot_clustering_comparison_chart,
+    plot_cluster_categorical_distribution, compute_cluster_categorical_profiles,
+    build_clustering_preprocessor, process_unlabelled_data, compute_silhouette_intervals,
+    compute_cluster_feature_intervals, train_gmm_clustering,
+    compute_cluster_overlap_analysis, benchmark_all_clustering_models,
+    train_hierarchical_clustering, train_dbscan_clustering
+)
+from pca_analysis import (
+    plot_pca_scree_plot, plot_pca_loadings_heatmap,
+    plot_pca_2d_scatter, plot_pca_3d_scatter,
+    plot_pca_vs_raw_comparison, train_and_evaluate_pca
+)
 
 # Page Configuration
 st.set_page_config(
@@ -30,14 +47,40 @@ st.sidebar.title("📁 Dataset & Theme Controls")
 theme_choice = st.sidebar.selectbox(
     "🎨 UI Background & Color Theme:",
     [
-        "Ultra-Clean Bright Light (Recommended)",
-        "Ice Blue Mesh Gradient",
-        "Emerald Mint Fresh Light",
+        "Soft Light Blue (Default)",
+        "Soft Light Green",
+        "Ultra-Clean Light Gray",
         "Midnight Dark Glass"
     ]
 )
 
-if theme_choice.startswith("Ultra-Clean"):
+if theme_choice.startswith("Soft Light Blue"):
+    app_bg = "linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #dbeafe 100%)"
+    card_bg = "#ffffff"
+    card_border = "1px solid #bfdbfe"
+    text_color = "#0f172a"
+    sub_text = "#1e3a8a"
+    tab_list_bg = "#bfdbfe"
+    tab_unselected_bg = "#ffffff"
+    tab_unselected_text = "#0f172a"
+    tab_unselected_border = "#93c5fd"
+    tab_active_bg = "#2563eb"
+    tab_active_text = "#ffffff"
+    tab_active_border = "#1d4ed8"
+elif theme_choice.startswith("Soft Light Green"):
+    app_bg = "linear-gradient(135deg, #dcfce7 0%, #f0fdf4 50%, #e8f5e9 100%)"
+    card_bg = "#ffffff"
+    card_border = "1px solid #a7f3d0"
+    text_color = "#064e3b"
+    sub_text = "#14532d"
+    tab_list_bg = "#a7f3d0"
+    tab_unselected_bg = "#ffffff"
+    tab_unselected_text = "#064e3b"
+    tab_unselected_border = "#6ee7b7"
+    tab_active_bg = "#059669"
+    tab_active_text = "#ffffff"
+    tab_active_border = "#047857"
+elif theme_choice.startswith("Ultra-Clean"):
     app_bg = "#f8fafc"
     card_bg = "#ffffff"
     card_border = "1px solid #cbd5e1"
@@ -50,32 +93,6 @@ if theme_choice.startswith("Ultra-Clean"):
     tab_active_bg = "#2563eb"
     tab_active_text = "#ffffff"
     tab_active_border = "#1d4ed8"
-elif theme_choice.startswith("Ice"):
-    app_bg = "linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #e2e8f0 100%)"
-    card_bg = "#ffffff"
-    card_border = "1px solid #93c5fd"
-    text_color = "#0f172a"
-    sub_text = "#334155"
-    tab_list_bg = "#dbeafe"
-    tab_unselected_bg = "#f0f9ff"
-    tab_unselected_text = "#1e3a8a"
-    tab_unselected_border = "#bfdbfe"
-    tab_active_bg = "#1d4ed8"
-    tab_active_text = "#ffffff"
-    tab_active_border = "#1e40af"
-elif theme_choice.startswith("Emerald"):
-    app_bg = "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 50%, #f8fafc 100%)"
-    card_bg = "#ffffff"
-    card_border = "1px solid #a7f3d0"
-    text_color = "#064e3b"
-    sub_text = "#1e293b"
-    tab_list_bg = "#d1fae5"
-    tab_unselected_bg = "#f0fdf4"
-    tab_unselected_text = "#064e3b"
-    tab_unselected_border = "#6ee7b7"
-    tab_active_bg = "#059669"
-    tab_active_text = "#ffffff"
-    tab_active_border = "#047857"
 else:
     app_bg = "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)"
     card_bg = "#1e293b"
@@ -245,11 +262,12 @@ st.markdown('<div class="main-title">🎓 Student Placement & Salary Analytics �
 st.markdown('<div class="sub-title">Classification & Regression using Base Models (Logistic, Linear, Decision Trees) & Ensemble Models (Bagging: Random Forest & Bagging; Boosting: Gradient Boosting & AdaBoost)</div>', unsafe_allow_html=True)
 
 # Tabs Navigation
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Dataset Overview & Upload",
     "🧹 Data Preprocessing & Health",
     "📈 Exploratory Data Analysis (EDA)",
-    "📐 Machine Learning Models & Metrics",
+    "🎯 Supervised Learning Models",
+    "🧩 Unsupervised Learning Models",
     "🔮 Live Placement & Salary Predictor"
 ])
 
@@ -418,8 +436,11 @@ with tab3:
         fig_lr = plot_cgpa_vs_salary_regression(filtered_df)
         st.plotly_chart(fig_lr, use_container_width=True, key="eda_cgpa_salary_reg")
 
-# ==================== TAB 4: MODELS & EVALUATION ====================
+# ==================== TAB 4: SUPERVISED LEARNING MODELS ====================
 with tab4:
+    st.subheader("🎯 Supervised Machine Learning Models (Classifiers & Regressors)")
+    st.info("Supervised Learning algorithms map student inputs (CGPA, test scores, stream, college tier) to target outcomes (`PlacementStatus` for Classification & `Salary Package` for Regression).")
+
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5, sub_tab6, sub_tab7, sub_tab8, sub_tab9, sub_tab10 = st.tabs([
         "🎯 Logistic Regression Classifier",
         "🌴 ID3 Decision Tree",
@@ -430,7 +451,7 @@ with tab4:
         "⚡ XGBoost Model",
         "🎒 Bagging & Random Forest",
         "📈 Linear Regression Regressor",
-        "⚖️ Model Comparison Table"
+        "⚖️ Supervised Model Comparison Table"
     ])
     
     log_m = metadata.get("logistic_metrics", {})
@@ -1234,6 +1255,16 @@ with tab4:
                 "Recall (%)": "N/A (RMSE: ₹" + str(simple_lr_m.get('rmse', 0)) + ")",
                 "F1 Score": "N/A",
                 "ROC-AUC / R²": f"R²: {simple_lr_m.get('r2_score', 0):.4f}"
+            },
+            {
+                "Model Name": f"KMeans Clustering (Optimal k={metadata.get('kmeans_metrics', {}).get('best_k', 3)})",
+                "Category": "Unsupervised Learning",
+                "Task Type": "Student Profile Segmentation",
+                "Accuracy (%)": f"Silhouette: {metadata.get('kmeans_metrics', {}).get('best_silhouette', 0):.4f}",
+                "Precision (%)": f"Inertia: {metadata.get('kmeans_metrics', {}).get('metrics_per_k', {}).get(str(metadata.get('kmeans_metrics', {}).get('best_k', 3)), {}).get('inertia', 0):,.1f}",
+                "Recall (%)": f"DB Index: {metadata.get('kmeans_metrics', {}).get('metrics_per_k', {}).get(str(metadata.get('kmeans_metrics', {}).get('best_k', 3)), {}).get('davies_bouldin', 0):.4f}",
+                "F1 Score": "N/A",
+                "ROC-AUC / R²": f"CH Index: {metadata.get('kmeans_metrics', {}).get('metrics_per_k', {}).get(str(metadata.get('kmeans_metrics', {}).get('best_k', 3)), {}).get('calinski_harabasz', 0):,.1f}"
             }
         ]
         
@@ -1292,6 +1323,397 @@ with tab4:
         )
         fig_comp_reg = apply_professional_layout(fig_comp_reg, "Regression R² Score Comparison", height=420)
         st.plotly_chart(fig_comp_reg, use_container_width=True, key="comp_reg_bar_chart")
+
+    # ==================== SUB-TAB 11: KMEANS CLUSTERING, OVERLAPPING CLUSTERS & UNLABELLED DATA ====================
+    with sub_tab11:
+        st.markdown("### 🧩 Unsupervised Clustering, Overlapping Clusters & Unlabelled Data Analytics Suite")
+        st.info("Unsupervised learning discovers natural student groupings, soft cluster overlaps, and persona segments using BOTH Numerical and Categorical feature encodings without relying on target labels.")
+        
+        km_m = metadata.get("kmeans_metrics", {})
+        metrics_per_k = km_m.get("metrics_per_k", {})
+        
+        best_elbow_k = km_m.get("best_elbow_k", 2)
+        best_sil_k = km_m.get("best_k", 2)
+        
+        st.success(f"🎯 **Automatic Model Selection:** The **Elbow Curve (X-axis: k-value, Y-axis: Inertia/WCSS)** detects **Best k = {best_elbow_k}** as optimal knee point. Peak Silhouette Score recommends **k = {best_sil_k}**.")
+        
+        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1.2, 1.2, 1.6])
+        with col_ctrl1:
+            selected_k = st.slider("🎛️ Select Number of Clusters (k-value):", min_value=2, max_value=10, value=best_elbow_k, step=1, key="kmeans_k_slider")
+        with col_ctrl2:
+            encoding_choice = st.radio("⚙️ Categorical Encoding Strategy:", ["One-Hot Encoding", "Ordinal Encoding"], horizontal=True, key="kmeans_encoding_mode")
+        with col_ctrl3:
+            viz_mode = st.radio("🌐 PCA Projection Dimension:", ["2D Scatter Plot", "3D Interactive Scatter Plot"], horizontal=True, key="kmeans_pca_mode")
+
+        k_str = str(selected_k)
+        current_k_metrics = metrics_per_k.get(k_str, {})
+        sil_val = current_k_metrics.get("silhouette_score", 0.0)
+        inertia_val = current_k_metrics.get("inertia", 0.0)
+        db_val = current_k_metrics.get("davies_bouldin", 0.0)
+        ch_val = current_k_metrics.get("calinski_harabasz", 0.0)
+
+        # Metric Cards
+        kc1, kc2, kc3, kc4, kc5 = st.columns(5)
+        with kc1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #1d4ed8;">{selected_k}</div>
+                <div class="metric-lbl">Clusters (k)</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with kc2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #059669;">{sil_val:.4f}</div>
+                <div class="metric-lbl">Silhouette Score S</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with kc3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #d97706;">{inertia_val:,.1f}</div>
+                <div class="metric-lbl">Inertia (WCSS)</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with kc4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #8b5cf6;">{db_val:.4f}</div>
+                <div class="metric-lbl">Davies-Bouldin Index</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with kc5:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #475569;">{ch_val:,.1f}</div>
+                <div class="metric-lbl">Calinski-Harabasz</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Sub-tabs suite inside clustering module
+        km_tab1, km_tab2, km_tab3, km_tab4, km_tab5, km_tab6, km_tab7, km_tab8 = st.tabs([
+            "🔍 Unlabelled Data & Pseudo-Labeling",
+            "📉 KMeans Measures & Silhouette/Inertia Curves",
+            "📐 Silhouette Intervals & Feature 95% CIs",
+            "🌀 Overlapping Clusters & Soft Membership (GMM)",
+            "🌿 Agglomerative Hierarchical Clustering",
+            "⚡ DBSCAN Density-Based Clustering",
+            "🌳 Multi-Clustering Paradigm Comparison",
+            "📋 Cluster Personas & PCA Visualizer"
+        ])
+
+        cat_cols_km = km_m.get("cat_feature_names", [c for c in ["Gender", "City", "CollegeTier", "Stream", "Specialisation", "Hostel", "HistoryOfBacklogs", "CGPA_Tier"] if c in df.columns])
+        num_cols_km = km_m.get("num_feature_names", [c for c in df.columns if c not in cat_cols_km and c not in ["StudentID", "IsAnomaly", "PlacementStatus", "Salary Package"]])
+        
+        X_num_df = df[num_cols_km].fillna(df[num_cols_km].median())
+        
+        enc_strat = "ordinal" if "Ordinal" in encoding_choice else "onehot"
+        preproc_km = build_clustering_preprocessor(num_cols_km, cat_cols_km, encoding_strategy=enc_strat)
+        X_processed_km = preproc_km.fit_transform(df[num_cols_km + cat_cols_km])
+
+        km_model = KMeans(n_clusters=selected_k, init="k-means++", n_init=10, random_state=42)
+        labels_km = km_model.fit_predict(X_processed_km)
+
+        # --- SUB-TAB 1: UNLABELLED DATA ---
+        with km_tab1:
+            st.markdown("#### 🔍 Unlabelled Dataset Inspection & Pseudo-Label Assignment")
+            st.info("Unsupervised clustering does not require labelled targets (`PlacementStatus` or `Salary Package`). It operates directly on unlabelled numerical and categorical attributes (CGPA, SGPA, Test Scores, College Tier, Stream, City) to partition students into natural skill tiers.")
+            
+            df_unlabelled, unlabelled_summary = process_unlabelled_data(df)
+            
+            col_un1, col_un2, col_un3 = st.columns(3)
+            with col_un1:
+                st.metric("Total Records Analyzed", f"{unlabelled_summary['total_records']:,}")
+            with col_un2:
+                st.metric("Mixed Feature Dimensions", f"{unlabelled_summary['feature_count']} ({len(num_cols_km)} Num + {len(cat_cols_km)} Cat)")
+            with col_un3:
+                st.metric("Pseudo-Label Cluster Segments", f"{len(unlabelled_summary['pseudo_cluster_counts'])} Clusters")
+
+            st.markdown("##### 📌 Pseudo-Labeled Student Profiles Preview (Unlabelled Mode)")
+            disp_cols = ["StudentID"] + [c for c in ["Gender", "CollegeTier", "Stream", "CGPA", "AptitudeTestScore", "CodingTestScore"] if c in df_unlabelled.columns] + ["Predicted_Cluster"]
+            st.dataframe(df_unlabelled[disp_cols].head(100), use_container_width=True)
+
+        # --- SUB-TAB 2: KMEANS MEASURES & ELBOW / SILHOUETTE CURVES ---
+        with km_tab2:
+            st.markdown(f"#### 📉 WCSS Inertia Elbow Curve & Silhouette Trend (Selected k = {selected_k})")
+            col_crv1, col_crv2 = st.columns(2)
+            with col_crv1:
+                st.plotly_chart(plot_elbow_curve(metrics_per_k, selected_k), use_container_width=True, key="elbow_chart")
+            with col_crv2:
+                st.plotly_chart(plot_silhouette_curve(metrics_per_k, selected_k), use_container_width=True, key="silhouette_chart")
+
+        # --- SUB-TAB 3: SILHOUETTE INTERVALS & FEATURE CONFIDENCE INTERVALS ---
+        with km_tab3:
+            st.markdown("#### 📐 Silhouette Score Statistical Intervals & Feature Centroid 95% Confidence Intervals")
+            
+            sil_intervals = compute_silhouette_intervals(X_processed_km, labels_km)
+            fig_sil_intervals = plot_silhouette_intervals_chart(sil_intervals)
+            st.plotly_chart(fig_sil_intervals, use_container_width=True, key="sil_intervals_chart")
+            
+            st.markdown("---")
+            st.markdown("#### 🎯 Feature Centroid 95% Confidence Intervals & IQRs")
+            selected_feat = st.selectbox("Select Numerical Feature to Inspect Centroid Intervals:", options=num_cols_km, index=0, key="feat_ci_select")
+            
+            feat_intervals_df = compute_cluster_feature_intervals(X_num_df, labels_km)
+            fig_feat_ci = plot_feature_confidence_intervals(feat_intervals_df.to_dict(orient="records"), selected_feat)
+            st.plotly_chart(fig_feat_ci, use_container_width=True, key="feat_ci_chart")
+            
+            st.markdown("##### 📋 Complete Feature Interval Metrics Matrix (Mean, 95% CI Lower/Upper, Median, IQR)")
+            st.dataframe(feat_intervals_df[feat_intervals_df["Feature"] == selected_feat], use_container_width=True)
+
+        # --- SUB-TAB 4: OVERLAPPING CLUSTERS & SOFT MEMBERSHIP (GMM) ---
+        with km_tab4:
+            st.markdown(f"#### 🌀 Overlapping Clusters & Soft Membership Distribution (GMM k = {selected_k})")
+            st.info("Unlike hard KMeans where each student strictly belongs to 1 cluster, Gaussian Mixture Models (GMM) compute **soft cluster membership probabilities P(Cluster_k | x)** on the encoded feature space. Points with high membership entropy or small top-2 probability margins represent **borderline / overlapping student profiles**.")
+            
+            gmm_info = train_gmm_clustering(X_processed_km, n_clusters=selected_k)
+            overlap_info = compute_cluster_overlap_analysis(gmm_info["probs"])
+            
+            col_ov1, col_ov2, col_ov3, col_ov4 = st.columns(4)
+            with col_ov1:
+                st.metric("GMM BIC Score", f"{gmm_info['bic']:,}")
+            with col_ov2:
+                st.metric("Overlapping Zone Students", f"{overlap_info['overlap_count']:,} ({overlap_info['overlap_rate_percent']}%)")
+            with col_ov3:
+                st.metric("Avg Membership Entropy", f"{overlap_info['avg_entropy']:.4f}")
+            with col_ov4:
+                st.metric("Avg Probability Margin", f"{overlap_info['avg_margin']:.4f}")
+                
+            is_3d = (viz_mode == "3D Interactive Scatter Plot")
+            fig_overlap = plot_overlapping_clusters_scatter(X_processed_km, gmm_info["probs"], gmm_info["labels"], is_3d=is_3d)
+            st.plotly_chart(fig_overlap, use_container_width=True, key="gmm_overlap_scatter_chart")
+
+        # --- SUB-TAB 5: AGGLOMERATIVE HIERARCHICAL CLUSTERING ---
+        with km_tab5:
+            st.markdown(f"#### 🌿 Agglomerative Hierarchical Clustering (Ward / Linkage Tree)")
+            st.info("Agglomerative Hierarchical Clustering constructs a bottom-up cluster hierarchy by iteratively merging closest pairs of student clusters based on pairwise feature distances and linkage criteria.")
+            
+            col_h1, col_h2 = st.columns([1, 1])
+            with col_h1:
+                linkage_choice = st.selectbox("🔗 Select Linkage Criterion:", ["ward", "complete", "average", "single"], index=0, key="hierarchical_linkage_select")
+            with col_h2:
+                hier_k = st.slider("🎛️ Number of Hierarchical Clusters (k):", min_value=2, max_value=10, value=selected_k, key="hierarchical_k_slider")
+                
+            hier_res = train_hierarchical_clustering(X_processed_km, n_clusters=hier_k, linkage=linkage_choice)
+            
+            col_hm1, col_hm2, col_hm3 = st.columns(3)
+            with col_hm1:
+                st.metric("Silhouette Score S", f"{hier_res['silhouette_score']:.4f}")
+            with col_hm2:
+                st.metric("Davies-Bouldin Index", f"{hier_res['davies_bouldin']:.4f}")
+            with col_hm3:
+                st.metric("Calinski-Harabasz Index", f"{hier_res['calinski_harabasz']:,}")
+                
+            st.markdown("##### 🗺️ Hierarchical Cluster PCA Subspace Projection")
+            is_3d = (viz_mode == "3D Interactive Scatter Plot")
+            fig_hier_pca = plot_cluster_pca_scatter(hier_res.get("X_sub", X_processed_km), hier_res["labels"], is_3d=is_3d)
+            st.plotly_chart(fig_hier_pca, use_container_width=True, key="hierarchical_pca_scatter_chart")
+            
+            st.markdown("##### 📊 Agglomerative Cluster Distribution")
+            fig_hier_dist = plot_cluster_distribution(hier_res["labels"])
+            st.plotly_chart(fig_hier_dist, use_container_width=True, key="hierarchical_dist_chart")
+
+        # --- SUB-TAB 6: DBSCAN DENSITY-BASED CLUSTERING ---
+        with km_tab6:
+            st.markdown(f"#### ⚡ DBSCAN Density-Based Spatial Clustering (Noise & Non-Spherical Clusters)")
+            st.info("DBSCAN groups dense student profile regions together and flags sparse low-density points as **Noise / Outliers (-1)**. Unlike KMeans or GMM, DBSCAN does not assume spherical clusters and automatically determines the cluster count.")
+            
+            col_db1, col_db2 = st.columns(2)
+            with col_db1:
+                eps_val = st.slider("📏 Maximum Epsilon Distance (eps):", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key="dbscan_eps_slider")
+            with col_db2:
+                min_samples_val = st.slider("👥 Minimum Neighborhood Samples (min_samples):", min_value=3, max_value=50, value=10, step=1, key="dbscan_min_samples_slider")
+                
+            dbs_res = train_dbscan_clustering(X_processed_km, eps=eps_val, min_samples=min_samples_val)
+            
+            col_dbm1, col_dbm2, col_dbm3, col_dbm4 = st.columns(4)
+            with col_dbm1:
+                st.metric("Discovered Clusters", f"{dbs_res['n_clusters']}")
+            with col_dbm2:
+                st.metric("Noise Points (-1)", f"{dbs_res['noise_count']} ({dbs_res['noise_ratio_percent']}%)")
+            with col_dbm3:
+                st.metric("Silhouette Score S", f"{dbs_res['silhouette_score']:.4f}")
+            with col_dbm4:
+                st.metric("Davies-Bouldin Index", f"{dbs_res['davies_bouldin']:.4f}")
+                
+            st.markdown("##### 🗺️ DBSCAN Density Cluster & Noise Subspace Projection")
+            is_3d = (viz_mode == "3D Interactive Scatter Plot")
+            fig_dbs_pca = plot_cluster_pca_scatter(dbs_res.get("X_sub", X_processed_km), dbs_res["labels"], is_3d=is_3d)
+            st.plotly_chart(fig_dbs_pca, use_container_width=True, key="dbscan_pca_scatter_chart")
+            
+            st.markdown("##### 📊 DBSCAN Cluster & Noise Point Distribution")
+            fig_dbs_dist = plot_cluster_distribution(dbs_res["labels"])
+            st.plotly_chart(fig_dbs_dist, use_container_width=True, key="dbscan_dist_chart")
+
+        # --- SUB-TAB 7: MULTI-CLUSTERING MODEL BENCHMARK ---
+        with km_tab7:
+            st.markdown(f"#### 🌳 Multi-Model Clustering Paradigm Comparison (k = {selected_k})")
+            st.info("Side-by-side benchmark comparing Partition-based (KMeans), Probabilistic (GMM), Tree-structured (Agglomerative Hierarchical), and Density-based (DBSCAN) clustering models on numerical + categorical encoded feature space.")
+            
+            benchmark_records = benchmark_all_clustering_models(X_processed_km, n_clusters=selected_k)
+            
+            st.dataframe(pd.DataFrame(benchmark_records), use_container_width=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            fig_bm = plot_clustering_comparison_chart(benchmark_records)
+            st.plotly_chart(fig_bm, use_container_width=True, key="clustering_benchmark_chart")
+
+        # --- SUB-TAB 8: CLUSTER PERSONAS & PCA VISUALIZER ---
+        with km_tab8:
+            st.markdown(f"#### 🗺️ PCA Cluster Projection & Student Persona Breakdown (k = {selected_k})")
+            
+            is_3d = (viz_mode == "3D Interactive Scatter Plot")
+            st.plotly_chart(plot_cluster_pca_scatter(X_processed_km, labels_km, is_3d=is_3d), use_container_width=True, key="kmeans_pca_scatter_chart")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.plotly_chart(plot_cluster_distribution(labels_km), use_container_width=True, key="cluster_dist_chart")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 🏷️ Categorical Feature Distribution per Cluster")
+            sel_cat_col = st.selectbox("Select Categorical Feature to Inspect Distribution across Clusters:", options=cat_cols_km, index=0, key="cat_dist_select")
+            fig_cat_dist = plot_cluster_categorical_distribution(df, labels_km, sel_cat_col)
+            st.plotly_chart(fig_cat_dist, use_container_width=True, key="cat_dist_chart")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            fig_heatmap, centroids_df = plot_cluster_centroids_heatmap(X_num_df, labels_km)
+            st.plotly_chart(fig_heatmap, use_container_width=True, key="cluster_centroids_heatmap_chart")
+            
+            st.markdown("#### 🎯 Numerical Centroids & Categorical Mode Personas Table")
+            df_temp = df.copy()
+            df_temp["Cluster"] = labels_km
+
+            summary_rows = []
+            cat_modes_df = compute_cluster_categorical_profiles(df, labels_km, cat_cols_km)
+            
+            for cid in sorted(df_temp["Cluster"].unique()):
+                cdf = df_temp[df_temp["Cluster"] == cid]
+                p_rate = (cdf["PlacementStatus"] == 1).mean() * 100 if "PlacementStatus" in cdf.columns else 0
+                avg_c = cdf["CGPA"].mean() if "CGPA" in cdf.columns else 0
+                avg_s = cdf["Salary Package"].mean() if "Salary Package" in cdf.columns else 0
+                avg_apt = cdf["AptitudeTestScore"].mean() if "AptitudeTestScore" in cdf.columns else 0
+                avg_soft = cdf["SoftSkillsScore"].mean() if "SoftSkillsScore" in cdf.columns else 0
+                
+                if p_rate >= 75 or avg_c >= 8.0:
+                    persona = "🌟 High Achievers (Top Tier)"
+                elif p_rate >= 45 or avg_c >= 6.5:
+                    persona = "📊 Moderate Performers (Mid Tier)"
+                else:
+                    persona = "⚠️ Need Improvement (Support Required)"
+
+                summary_rows.append({
+                    "Cluster ID": f"Cluster {cid}",
+                    "Persona Segment": persona,
+                    "Student Count": len(cdf),
+                    "Placement Rate (%)": f"{p_rate:.2f}%",
+                    "Avg CGPA": f"{avg_c:.2f}",
+                    "Avg Salary (LPA)": f"₹{avg_s:.2f}",
+                    "Avg Aptitude Score": f"{avg_apt:.1f}",
+                    "Avg Soft Skills Score": f"{avg_soft:.1f}"
+                })
+            
+            summary_df = pd.DataFrame(summary_rows)
+            merged_summary = pd.merge(summary_df, cat_modes_df, on="Cluster ID", how="left")
+            st.dataframe(merged_summary, use_container_width=True)
+
+    # ------------------ SUB-TAB 12: PRINCIPAL COMPONENT ANALYSIS (PCA) ------------------
+    with sub_tab12:
+        st.markdown("### 🌌 Principal Component Analysis (PCA) & Dimensionality Reduction Analytics")
+        st.info("""
+        **Principal Component Analysis (PCA)**: Unsupervised linear dimensionality reduction technique that transforms 
+        high-dimensional correlated student features into an orthogonal subspace of uncorrelated Principal Components (PC1, PC2, ...), 
+        retaining maximum feature variance while mitigating multicollinearity.
+        """)
+
+        pca_m = metadata.get("pca_metrics", {})
+        if not pca_m or "explained_variance_ratio" not in pca_m:
+            pca_m, _, _ = train_and_evaluate_pca(filtered_df)
+
+        pca_c_m = pca_m.get("pca_logistic_metrics", {})
+        pca_r_m = pca_m.get("pca_lr_metrics", {})
+
+        pc1_v = pca_m.get("pc1_var_pct", 0)
+        pc2_v = pca_m.get("pc2_var_pct", 0)
+        n_comp_95 = pca_m.get("n_comp_95", 0)
+        pca_acc = pca_c_m.get("accuracy", 0) * 100
+        pca_r2 = pca_r_m.get("r2_score", 0)
+
+        pc1, pc2, pc3, pc4, pc5 = st.columns(5)
+        with pc1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #1d4ed8;">{pc1_v:.2f}%</div>
+                <div class="metric-lbl">PC1 Variance Explained</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with pc2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #059669;">{pc2_v:.2f}%</div>
+                <div class="metric-lbl">PC2 Variance Explained</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with pc3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #7c3aed;">{n_comp_95} PCs</div>
+                <div class="metric-lbl">Components for 95% Var</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with pc4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #d97706;">{pca_acc:.2f}%</div>
+                <div class="metric-lbl">PCA-Logistic Accuracy</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with pc5:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #0f172a;">{pca_r2:.4f}</div>
+                <div class="metric-lbl">PCA-Linear Reg R² Score</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_scree, col_loadings = st.columns([1.1, 1.2])
+        with col_scree:
+            st.plotly_chart(plot_pca_scree_plot(pca_m), use_container_width=True, key="pca_scree_chart")
+
+        with col_loadings:
+            st.plotly_chart(plot_pca_loadings_heatmap(pca_m), use_container_width=True, key="pca_loadings_chart")
+
+        st.markdown("---")
+        st.markdown("#### 🗺️ Interactive PCA Subspace Projection Scatter Plot")
+        
+        col_proj_ctrl, col_proj_scatter = st.columns([0.35, 0.65])
+        with col_proj_ctrl:
+            pca_dim_mode = st.radio("Projection Dimension:", ["2D Scatter (PC1 vs PC2)", "3D Scatter (PC1 vs PC2 vs PC3)"], key="pca_dim_radio")
+            pca_hue_choice = st.radio("Color Hue:", ["PlacementStatus", "Salary Package"] if "Salary Package" in filtered_df.columns else ["PlacementStatus"], key="pca_hue_radio")
+            
+            st.markdown("##### 📌 Key Principal Components Breakdown")
+            top_pcs = pca_m.get("top_features_per_pc", {})
+            for pc_k, feats in list(top_pcs.items())[:3]:
+                st.markdown(f"**{pc_k} Top Feature Weights:**")
+                for f_item in feats[:3]:
+                    st.caption(f"• `{f_item['Feature']}` ({f_item['Loading']:+.3f})")
+
+        with col_proj_scatter:
+            _, _, df_pca_curr = train_and_evaluate_pca(filtered_df)
+            if pca_dim_mode.startswith("2D"):
+                st.plotly_chart(plot_pca_2d_scatter(df_pca_curr, color_col=pca_hue_choice), use_container_width=True, key="pca_2d_scatter_fig")
+            else:
+                st.plotly_chart(plot_pca_3d_scatter(df_pca_curr, color_col=pca_hue_choice), use_container_width=True, key="pca_3d_scatter_fig")
+
+        st.markdown("---")
+        st.markdown("#### ⚖️ Full Feature Baseline vs PCA-Transformed Models Performance Comparison")
+        st.plotly_chart(
+            plot_pca_vs_raw_comparison(log_m, pca_c_m, lr_m, pca_r_m),
+            use_container_width=True,
+            key="pca_vs_raw_chart"
+        )
 
 # ==================== TAB 5: LIVE PLACEMENT & SALARY PREDICTOR ====================
 with tab5:
@@ -1413,7 +1835,11 @@ with tab5:
         rf_prob = float(rf_c_pipe.predict_proba(input_df)[0][1]) if rf_c_pipe and hasattr(rf_c_pipe, "predict_proba") else 0.0
         rf_pred = int(rf_c_pipe.predict(input_df)[0]) if rf_c_pipe else 0
 
-        # 3. Regressors Inference (Linear, ID3, C4.5, CART, GBM, LightGBM, XGBoost, Random Forest)
+        pca_c_pipe = ensemble_pipelines.get("pca_c")
+        pca_prob = float(pca_c_pipe.predict_proba(input_df)[0][1]) if pca_c_pipe and hasattr(pca_c_pipe, "predict_proba") else 0.0
+        pca_pred = int(pca_c_pipe.predict(input_df)[0]) if pca_c_pipe else 0
+
+        # 3. Regressors Inference (Linear, ID3, C4.5, CART, GBM, LightGBM, XGBoost, Random Forest, PCA Linear)
         salary_lr = max(0.0, float(lr_pipeline.predict(input_df)[0]))
         
         id3_r_pipe = ensemble_pipelines.get("id3_r")
@@ -1437,6 +1863,9 @@ with tab5:
         rf_r_pipe = ensemble_pipelines.get("rf_r")
         salary_rf = max(0.0, float(rf_r_pipe.predict(input_df)[0])) if rf_r_pipe else 0.0
 
+        pca_r_pipe = ensemble_pipelines.get("pca_r")
+        salary_pca = max(0.0, float(pca_r_pipe.predict(input_df)[0])) if pca_r_pipe else 0.0
+
         cgpa_df = pd.DataFrame([{"CGPA": cgpa}])
         salary_simple = max(0.0, float(simple_lr.predict(cgpa_df)[0]))
         
@@ -1444,121 +1873,135 @@ with tab5:
         st.subheader("🎯 Model Prediction Results Comparison across All Models")
         
         st.markdown("#### 🟢 Placement Classification Outcomes")
-        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+        c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns(9)
         with c1:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if log_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if log_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if log_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if log_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">Logistic ({log_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if id3_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if id3_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if id3_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if id3_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">ID3 ({id3_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c3:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if c45_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if c45_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if c45_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if c45_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">C4.5 ({c45_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c4:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if cart_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if cart_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if cart_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if cart_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">CART ({cart_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c5:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if gbm_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if gbm_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if gbm_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if gbm_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">GBM ({gbm_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c6:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if lgb_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if lgb_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if lgb_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if lgb_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">LightGBM ({lgb_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c7:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if xgb_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if xgb_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if xgb_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if xgb_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">XGBoost ({xgb_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
         with c8:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: {'#059669' if rf_pred==1 else '#dc2626'}; font-size: 1.0rem;">{'PLACED ✅' if rf_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-val" style="color: {'#059669' if rf_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if rf_pred==1 else 'NOT PLACED ❌'}</div>
                 <div class="metric-lbl">RF ({rf_prob*100:.0f}%)</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c9:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: {'#059669' if pca_pred==1 else '#dc2626'}; font-size: 0.95rem;">{'PLACED ✅' if pca_pred==1 else 'NOT PLACED ❌'}</div>
+                <div class="metric-lbl">PCA-Logistic ({pca_prob*100:.0f}%)</div>
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("#### 📐 Estimated Salary Packages (₹ LPA)")
-        rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8 = st.columns(8)
+        rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns(9)
         with rc1:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #1d4ed8; font-size: 1.0rem;">₹{salary_lr:.2f}</div>
+                <div class="metric-val" style="color: #1d4ed8; font-size: 0.95rem;">₹{salary_lr:.2f}</div>
                 <div class="metric-lbl">Linear Reg</div>
             </div>
             """, unsafe_allow_html=True)
         with rc2:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #10b981; font-size: 1.0rem;">₹{salary_id3:.2f}</div>
+                <div class="metric-val" style="color: #10b981; font-size: 0.95rem;">₹{salary_id3:.2f}</div>
                 <div class="metric-lbl">ID3 Tree</div>
             </div>
             """, unsafe_allow_html=True)
         with rc3:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #8b5cf6; font-size: 1.0rem;">₹{salary_c45:.2f}</div>
+                <div class="metric-val" style="color: #8b5cf6; font-size: 0.95rem;">₹{salary_c45:.2f}</div>
                 <div class="metric-lbl">C4.5 Tree</div>
             </div>
             """, unsafe_allow_html=True)
         with rc4:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #059669; font-size: 1.0rem;">₹{salary_cart:.2f}</div>
-                <div class="metric-lbl">CART (Karth)</div>
+                <div class="metric-val" style="color: #059669; font-size: 0.95rem;">₹{salary_cart:.2f}</div>
+                <div class="metric-lbl">CART</div>
             </div>
             """, unsafe_allow_html=True)
         with rc5:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #dc2626; font-size: 1.0rem;">₹{salary_gbm:.2f}</div>
+                <div class="metric-val" style="color: #dc2626; font-size: 0.95rem;">₹{salary_gbm:.2f}</div>
                 <div class="metric-lbl">GBM</div>
             </div>
             """, unsafe_allow_html=True)
         with rc6:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #d97706; font-size: 1.0rem;">₹{salary_lgb:.2f}</div>
+                <div class="metric-val" style="color: #d97706; font-size: 0.95rem;">₹{salary_lgb:.2f}</div>
                 <div class="metric-lbl">LightGBM</div>
             </div>
             """, unsafe_allow_html=True)
         with rc7:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #7c3aed; font-size: 1.0rem;">₹{salary_xgb:.2f}</div>
+                <div class="metric-val" style="color: #7c3aed; font-size: 0.95rem;">₹{salary_xgb:.2f}</div>
                 <div class="metric-lbl">XGBoost</div>
             </div>
             """, unsafe_allow_html=True)
         with rc8:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-val" style="color: #0284c7; font-size: 1.0rem;">₹{salary_rf:.2f}</div>
+                <div class="metric-val" style="color: #0284c7; font-size: 0.95rem;">₹{salary_rf:.2f}</div>
                 <div class="metric-lbl">Random Forest</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with rc9:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-val" style="color: #475569; font-size: 0.95rem;">₹{salary_pca:.2f}</div>
+                <div class="metric-lbl">PCA-Linear</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1575,5 +2018,15 @@ with tab5:
             st.success(f"🎉 **High Placement Likelihood ({placed_votes}/9 Model Votes for Placement)!** Consensus Confidence: **{avg_prob*100:.1f}%** | Expected Salary Package (LightGBM): **₹{salary_lgb:.2f} LPA** (XGBoost: **₹{salary_xgb:.2f} LPA**).")
         else:
             st.warning(f"⚠️ **Low Placement Likelihood ({placed_votes}/9 Model Votes for Placement)** | Consensus Confidence: **{avg_prob*100:.1f}%**. Consider strengthening academic standing and interview skills.")
+
+        # 4. KMeans Cluster Assignment
+        km_pipeline = ensemble_pipelines.get("kmeans")
+        if km_pipeline is not None:
+            try:
+                predicted_cluster = int(km_pipeline.predict(input_df)[0])
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.info(f"🧩 **Unsupervised Student Persona Segment (KMeans Cluster {predicted_cluster}):** Student profile aligns with **Cluster {predicted_cluster}** based on multidimensional numerical & categorical feature scaling.")
+            except Exception as e:
+                print(f"Cluster prediction exception: {e}")
 
 
